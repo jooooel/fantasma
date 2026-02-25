@@ -6,7 +6,7 @@
     <ImplicitUsings>true</ImplicitUsings>
     <RootNamespace>Fantasma</RootNamespace>
     <PackageId>Jooooel.Fantasma</PackageId>
-    <Version>0.4.0</Version>
+    <Version>0.4.1</Version>
     <Authors>Joel</Authors>
     <Description>A simple in-memory and SQL-based job scheduler for .NET</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cronos" Version="0.8.4">
+    <PackageReference Include="Cronos" Version="0.11.1">
       <PrivateAssets>Compile</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.6" />
