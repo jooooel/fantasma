@@ -45,6 +45,27 @@ public sealed class FantasmaConfiguration
     public FantasmaConfiguration AddRecurringJob<T>(string name, JobId id, Cron cron, T data)
         where T : IJobData
     {
+        // Validate the cron expression eagerly at registration time
+        // so that invalid expressions fail at startup, not silently at runtime
+        CronExpression parsedCron;
+        try
+        {
+            parsedCron = CronExpression.Parse(cron.Expression, CronFormat.IncludeSeconds);
+        }
+        catch (Exception ex)
+        {
+            throw new ArgumentException(
+                $"Invalid cron expression '{cron.Expression}' for job '{name}': {ex.Message}", nameof(cron), ex);
+        }
+
+        var nextOccurrence = parsedCron.GetNextOccurrence(DateTime.UtcNow);
+        if (nextOccurrence == null)
+        {
+            throw new ArgumentException(
+                $"Cron expression '{cron.Expression}' for job '{name}' does not produce a next occurrence. " +
+                "This may indicate an incompatible Cronos version.", nameof(cron));
+        }
+
         RecurringJobs.Add(new RecurringJob(id.Id, name, cron.Expression, data));
         return this;
     }

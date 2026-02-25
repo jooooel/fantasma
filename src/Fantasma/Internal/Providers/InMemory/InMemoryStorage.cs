@@ -3,11 +3,13 @@ namespace Fantasma.Internal;
 internal sealed class InMemoryStorage : IJobStorage
 {
     private readonly TimeProvider _time;
+    private readonly ILogger<InMemoryStorage> _logger;
     private readonly List<Job> _jobs;
 
-    public InMemoryStorage(TimeProvider time)
+    public InMemoryStorage(TimeProvider time, ILogger<InMemoryStorage> logger)
     {
         _time = time ?? throw new ArgumentNullException(nameof(time));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _jobs = new List<Job>();
     }
 
@@ -61,6 +63,15 @@ internal sealed class InMemoryStorage : IJobStorage
             if (rescheduled != null)
             {
                 _jobs.Add(rescheduled);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Fantasma: Recurring job '{Name}' could not be rescheduled. " +
+                    "Cron expression '{Cron}' did not produce a next occurrence. " +
+                    "This job will not run again.",
+                    job.Name,
+                    job.Cron);
             }
         }
 

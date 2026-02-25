@@ -7,6 +7,7 @@ internal sealed class JobEngine : BackgroundService, IJobEngine
     private readonly IServiceProvider _services;
     private readonly TimeProvider _time;
     private readonly SleepPreference? _sleepPreference;
+    private readonly ILogger<JobEngine> _logger;
 
     public JobEngine(
         IJobScheduler scheduler,
@@ -15,17 +16,25 @@ internal sealed class JobEngine : BackgroundService, IJobEngine
         IEnumerable<RecurringJob> recurringJobs,
         IServiceProvider services,
         TimeProvider time,
+        ILogger<JobEngine> logger,
         SleepPreference? sleepPreference = null)
     {
         _cluster = cluster ?? throw new ArgumentNullException(nameof(cluster));
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _time = time ?? throw new ArgumentNullException(nameof(time));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _sleepPreference = sleepPreference;
 
         // Add all recurring jobs
-        foreach (var recurringJob in recurringJobs)
+        var jobs = recurringJobs.ToList();
+        _logger.LogInformation("Fantasma: Registering {Count} recurring job(s)", jobs.Count);
+        foreach (var recurringJob in jobs)
         {
+            _logger.LogInformation(
+                "Fantasma: Scheduling recurring job '{Name}' (cron: {Cron})",
+                recurringJob.Name,
+                recurringJob.Cron);
             scheduler.Schedule(
                 recurringJob.Name,
                 recurringJob.Data,
@@ -89,6 +98,7 @@ internal sealed class JobEngine : BackgroundService, IJobEngine
         Job job,
         CancellationToken cancellationToken)
     {
+        _logger.LogDebug("Fantasma: Executing job '{Name}' ({Kind})", job.Name, job.Kind);
         try
         {
             using var scope = _services.CreateScope();
@@ -97,12 +107,17 @@ internal sealed class JobEngine : BackgroundService, IJobEngine
             var handleType = typeof(IJobHandler<>).MakeGenericType(job.Data.GetType());
             if (scope.ServiceProvider.GetService(handleType) is not IJobHandler handler)
             {
-                // TODO: Validate this at schedule time?
-                throw new InvalidOperationException("Could not resolve job handler");
+                _logger.LogError(
+                    "Fantasma: Could not resolve handler for job '{Name}' (type: {Type})",
+                    job.Name,
+                    job.Data.GetType().FullName);
+                throw new InvalidOperationException($"Could not resolve job handler for '{job.Name}'");
             }
 
             await storage.UpdateJob(job, j => j.Status = JobStatus.Running);
             await handler.Handle(job.Data, cancellationToken);
+
+            _logger.LogDebug("Fantasma: Job '{Name}' completed successfully", job.Name);
 
             // Release the job
             var completed = GetCompletedJob(job, JobStatus.Successful, exception: null);
@@ -110,6 +125,7 @@ internal sealed class JobEngine : BackgroundService, IJobEngine
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Fantasma: Job '{Name}' failed", job.Name);
             var completed = GetCompletedJob(job, JobStatus.Failed, ex);
             await storage.Release(completed);
         }
